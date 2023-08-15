@@ -154,8 +154,8 @@ def cli():
     align_language = args["language"] if args[
                                              "language"] is not None else "en"  # default to loading english if not specified
     align_model, align_metadata = load_align_model(align_language, device, model_name=align_model)
-    for i in range(1000):
-        for audio_path in args.pop("audio"):
+    for audio_path in args.pop("audio"):
+        for i in range(1000):
             audio = load_audio(audio_path)
             # >> VAD & ASR
             print(">>Performing transcription...")
