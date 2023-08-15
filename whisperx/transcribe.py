@@ -145,7 +145,7 @@ def cli():
     if args["max_line_count"] and not args["max_line_width"]:
         warnings.warn("--max_line_count has no effect without --max_line_width")
     writer_args = {arg: args.pop(arg) for arg in word_options}
-    
+
     # Part 1: VAD & ASR Loop
     results = []
     tmp_results = []
@@ -154,17 +154,18 @@ def cli():
     align_language = args["language"] if args[
                                              "language"] is not None else "en"  # default to loading english if not specified
     align_model, align_metadata = load_align_model(align_language, device, model_name=align_model)
-    for audio_path in args.pop("audio"):
-        audio = load_audio(audio_path)
-        # >> VAD & ASR
-        print(">>Performing transcription...")
-        result = model.transcribe(audio, batch_size=batch_size)
+    for i in range(1000):
+        for audio_path in args.pop("audio"):
+            audio = load_audio(audio_path)
+            # >> VAD & ASR
+            print(">>Performing transcription...")
+            result = model.transcribe(audio, batch_size=batch_size)
 
-        input_audio = audio_path
+            input_audio = audio_path
 
-        if align_model is not None and len(result["segments"]) > 0:
-            print(">>Performing alignment...")
-            result = align(result["segments"], align_model, align_metadata, input_audio, device, interpolate_method=interpolate_method, return_char_alignments=return_char_alignments)
+            if align_model is not None and len(result["segments"]) > 0:
+                print(">>Performing alignment...")
+                result = align(result["segments"], align_model, align_metadata, input_audio, device, interpolate_method=interpolate_method, return_char_alignments=return_char_alignments)
 
 
 if __name__ == "__main__":
