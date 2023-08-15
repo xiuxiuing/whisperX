@@ -151,63 +151,21 @@ def cli():
     tmp_results = []
     # model = load_model(model_name, device=device, download_root=model_dir)
     model = load_model(model_name, device=device, device_index=device_index, compute_type=compute_type, language=args['language'], asr_options=asr_options, vad_options={"vad_onset": vad_onset, "vad_offset": vad_offset}, task=task)
-
+    align_language = args["language"] if args[
+                                             "language"] is not None else "en"  # default to loading english if not specified
+    align_model, align_metadata = load_align_model(align_language, device, model_name=align_model)
     for audio_path in args.pop("audio"):
         audio = load_audio(audio_path)
         # >> VAD & ASR
         print(">>Performing transcription...")
         result = model.transcribe(audio, batch_size=batch_size)
-        results.append((result, audio_path))
 
-    # Unload Whisper and VAD
-    del model
-    gc.collect()
-    torch.cuda.empty_cache()
+        input_audio = audio_path
 
-    # Part 2: Align Loop
-    if not no_align:
-        tmp_results = results
-        results = []
-        align_language = args["language"] if args["language"] is not None else "en" # default to loading english if not specified
-        align_model, align_metadata = load_align_model(align_language, device, model_name=align_model)
-        for result, audio_path in tmp_results:
-            # >> Align
-            if len(tmp_results) > 1:
-                input_audio = audio_path
-            else:
-                # lazily load audio from part 1
-                input_audio = audio
+        if align_model is not None and len(result["segments"]) > 0:
+            print(">>Performing alignment...")
+            result = align(result["segments"], align_model, align_metadata, input_audio, device, interpolate_method=interpolate_method, return_char_alignments=return_char_alignments)
 
-            if align_model is not None and len(result["segments"]) > 0:
-                if result.get("language", "en") != align_metadata["language"]:
-                    # load new language
-                    print(f"New language found ({result['language']})! Previous was ({align_metadata['language']}), loading new alignment model for new language...")
-                    align_model, align_metadata = load_align_model(result["language"], device)
-                print(">>Performing alignment...")
-                result = align(result["segments"], align_model, align_metadata, input_audio, device, interpolate_method=interpolate_method, return_char_alignments=return_char_alignments)
-
-            results.append((result, audio_path))
-
-        # Unload align model
-        del align_model
-        gc.collect()
-        torch.cuda.empty_cache()
-
-    # >> Diarize
-    if diarize:
-        if hf_token is None:
-            print("Warning, no --hf_token used, needs to be saved in environment variable, otherwise will throw error loading diarization model...")
-        tmp_results = results
-        print(">>Performing diarization...")
-        results = []
-        diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
-        for result, input_audio_path in tmp_results:
-            diarize_segments = diarize_model(input_audio_path, min_speakers=min_speakers, max_speakers=max_speakers)
-            result = assign_word_speakers(diarize_segments, result)
-            results.append((result, input_audio_path))
-    # >> Write
-    for result, audio_path in results:
-        writer(result, audio_path, writer_args)
 
 if __name__ == "__main__":
     cli()
